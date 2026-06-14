@@ -51,15 +51,15 @@ RUN composer dump-autoload --optimize --no-dev --no-interaction \
     && php artisan package:discover --ansi || true
 
 # ---- Deploy/start scripts -------------------------------------------------
+COPY deploy/start.sh /usr/local/bin/start.sh
 COPY deploy/start-web.sh /usr/local/bin/start-web.sh
 COPY deploy/start-reverb.sh /usr/local/bin/start-reverb.sh
-RUN chmod +x /usr/local/bin/start-web.sh /usr/local/bin/start-reverb.sh \
+RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/start-web.sh /usr/local/bin/start-reverb.sh \
     && chmod -R ug+rwX storage bootstrap/cache
 
 # Railway injects $PORT; the start script reads it. Default for local runs.
 ENV PORT=8080
 EXPOSE 8080
 
-# Web service default. The reverb Railway service overrides this with
-# start-reverb.sh (see DEPLOY.md).
-CMD ["/usr/local/bin/start-web.sh"]
+# Dispatcher picks web vs reverb by the SERVICE_TYPE env (see deploy/start.sh).
+CMD ["/usr/local/bin/start.sh"]
