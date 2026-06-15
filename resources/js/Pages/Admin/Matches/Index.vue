@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { computed, reactive, ref } from 'vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import AdminLayout from '../../../Layouts/AdminLayout.vue';
 
 type TeamRef = {
   id: string | null;
   displayName: string;
+  resolved?: boolean;
 } | null;
 
 type SetRow = {
@@ -14,6 +15,12 @@ type SetRow = {
   teamAScore: number;
   teamBScore: number;
   winnerId: string | null;
+};
+
+type ScoringConfig = {
+  pointsToWin: number;
+  setsToWin: number;
+  deuceCap: number;
 };
 
 type Match = {
@@ -30,9 +37,11 @@ type Match = {
   scheduledAt: string | null;
   teamA: TeamRef;
   teamB: TeamRef;
+  teamsResolved: boolean;
   winnerId: string | null;
   winnerName: string | null;
   sets: SetRow[];
+  scoringConfig: ScoringConfig;
 };
 
 const props = defineProps<{
@@ -130,6 +139,148 @@ function resetFilters() {
   categoryFilter.value = '';
   statusFilter.value = '';
 }
+
+// ===== Inline result editor =====
+// Only one row open at a time. Opening a row (re)builds the editor state.
+const openMatchId = ref<string | null>(null);
+
+type EditableSet = { a: string; b: string };
+const editor = reactive<{ rows: EditableSet[]; walkoverWinner: string }>({
+  rows: [],
+  walkoverWinner: '',
+});
+
+// A single useForm reused per open row (sets payload built on submit).
+const resultForm = useForm<{ sets: { teamAScore: number; teamBScore: number }[] }>({ sets: [] });
+const walkoverForm = useForm<{ winner_team_id: string }>({ winner_team_id: '' });
+const resetForm = useForm({});
+
+// up to setsToWin*2 - 1 rows (group: 1, best-of-3: 3).
+function maxSets(m: Match): number {
+  return m.scoringConfig.setsToWin * 2 - 1;
+}
+
+function buildRows(m: Match): EditableSet[] {
+  const ordered = (m.sets ?? []).slice().sort((x, y) => x.setNumber - y.setNumber);
+  const rows: EditableSet[] = [];
+  for (let i = 0; i < maxSets(m); i++) {
+    const existing = ordered[i];
+    rows.push({
+      a: existing ? String(existing.teamAScore) : '',
+      b: existing ? String(existing.teamBScore) : '',
+    });
+  }
+  return rows;
+}
+
+function openEditor(m: Match) {
+  if (openMatchId.value === m.id) {
+    openMatchId.value = null;
+    return;
+  }
+  openMatchId.value = m.id;
+  editor.rows = buildRows(m);
+  editor.walkoverWinner = m.winnerId ?? '';
+  resultForm.clearErrors();
+  walkoverForm.clearErrors();
+}
+
+function closeEditor() {
+  openMatchId.value = null;
+}
+
+function isOpen(m: Match): boolean {
+  return openMatchId.value === m.id;
+}
+
+// Per-set winner: who first reaches pointsToWin with a 2-point lead, capped at deuceCap.
+function setWinnerId(m: Match, a: number, b: number): string | null {
+  const { pointsToWin, deuceCap } = m.scoringConfig;
+  const hi = Math.max(a, b);
+  const lo = Math.min(a, b);
+  if (hi < pointsToWin) return null;
+  if (hi >= deuceCap) {
+    if (hi - lo < 1) return null;
+  } else if (hi - lo < 2) {
+    return null;
+  }
+  if (a === b) return null;
+  return a > b ? m.teamA?.id ?? null : m.teamB?.id ?? null;
+}
+
+// Only consider rows that were actually filled in (both fields numeric).
+function filledSets(): { a: number; b: number }[] {
+  return editor.rows
+    .map((r) => ({ a: Number(r.a), b: Number(r.b), raw: r }))
+    .filter((r) => r.raw.a !== '' && r.raw.b !== '' && !Number.isNaN(r.a) && !Number.isNaN(r.b))
+    .map((r) => ({ a: r.a, b: r.b }));
+}
+
+function preview(m: Match): { aSets: number; bSets: number; winnerId: string | null; invalid: boolean } {
+  let aSets = 0;
+  let bSets = 0;
+  let invalid = false;
+  for (const s of filledSets()) {
+    const w = setWinnerId(m, s.a, s.b);
+    if (w === null) {
+      invalid = true;
+      continue;
+    }
+    if (w === m.teamA?.id) aSets++;
+    else if (w === m.teamB?.id) bSets++;
+  }
+  const need = m.scoringConfig.setsToWin;
+  let winnerId: string | null = null;
+  if (aSets >= need && aSets > bSets) winnerId = m.teamA?.id ?? null;
+  else if (bSets >= need && bSets > aSets) winnerId = m.teamB?.id ?? null;
+  return { aSets, bSets, winnerId, invalid };
+}
+
+function previewWinnerName(m: Match): string | null {
+  const w = preview(m).winnerId;
+  if (!w) return null;
+  return w === m.teamA?.id ? teamName(m.teamA) : teamName(m.teamB);
+}
+
+const livePreview = computed(() => {
+  const m = props.matches.find((x) => x.id === openMatchId.value);
+  if (!m) return null;
+  const p = preview(m);
+  return { ...p, winnerName: previewWinnerName(m) };
+});
+
+function saveResult(m: Match) {
+  resultForm
+    .transform(() => ({ sets: filledSets() }))
+    .put(route('admin.matches.result', { match: m.id }), {
+      preserveScroll: true,
+      onSuccess: () => closeEditor(),
+    });
+}
+
+function declareWalkover(m: Match) {
+  if (!editor.walkoverWinner) return;
+  if (!confirm('Declare a walkover? This overwrites any existing result.')) return;
+  walkoverForm.winner_team_id = editor.walkoverWinner;
+  walkoverForm.put(route('admin.matches.walkover', { match: m.id }), {
+    preserveScroll: true,
+    onSuccess: () => closeEditor(),
+  });
+}
+
+function resetResult(m: Match) {
+  if (!confirm('Reset this match back to Scheduled? Set scores and bracket progression will be cleared.')) {
+    return;
+  }
+  resetForm.put(route('admin.matches.reset', { match: m.id }), {
+    preserveScroll: true,
+    onSuccess: () => closeEditor(),
+  });
+}
+
+function resultLabel(m: Match): string {
+  return isCompleted(m) ? 'Edit result' : 'Enter result';
+}
 </script>
 
 <template>
@@ -204,8 +355,116 @@ function resetFilters() {
             </dd>
           </div>
         </dl>
-        <div class="mt-3 flex justify-end">
+        <div class="mt-3 flex justify-end gap-2">
+          <button type="button" class="btn-primary text-xs px-3 py-1.5" @click="openEditor(m)">
+            {{ isOpen(m) ? 'Close' : resultLabel(m) }}
+          </button>
           <Link :href="route('admin.matches.edit', { match: m.id })" class="btn-secondary text-xs px-3 py-1.5">Edit</Link>
+        </div>
+
+        <!-- Inline result editor (mobile) -->
+        <div v-if="isOpen(m)" class="mt-4 border-t border-slate-100 pt-4">
+          <!-- Teams not determined -->
+          <div
+            v-if="!m.teamsResolved"
+            class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          >
+            Teams not determined yet — resolve the bracket first.
+          </div>
+          <template v-else>
+            <p class="text-xs text-slate-500 mb-3">
+              Best of {{ maxSets(m) }} ·
+              to {{ m.scoringConfig.pointsToWin }} pts ·
+              win {{ m.scoringConfig.setsToWin }} set{{ m.scoringConfig.setsToWin > 1 ? 's' : '' }} ·
+              cap {{ m.scoringConfig.deuceCap }}. Fill only sets that were played.
+            </p>
+
+            <div class="space-y-3">
+              <div
+                v-for="(row, i) in editor.rows"
+                :key="i"
+                class="grid grid-cols-[3rem_1fr_1fr] gap-3 items-end"
+              >
+                <div class="text-sm font-medium text-slate-600 pb-2">Set {{ i + 1 }}</div>
+                <div>
+                  <span class="block text-xs text-slate-400 mb-1 truncate">{{ teamName(m.teamA) }}</span>
+                  <input
+                    v-model="row.a"
+                    type="number"
+                    min="0"
+                    inputmode="numeric"
+                    class="input"
+                    :aria-label="`Set ${i + 1} ${teamName(m.teamA)} score`"
+                  />
+                </div>
+                <div>
+                  <span class="block text-xs text-slate-400 mb-1 truncate">{{ teamName(m.teamB) }}</span>
+                  <input
+                    v-model="row.b"
+                    type="number"
+                    min="0"
+                    inputmode="numeric"
+                    class="input"
+                    :aria-label="`Set ${i + 1} ${teamName(m.teamB)} score`"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Live winner preview -->
+            <div v-if="livePreview" class="mt-3 rounded-lg bg-white px-4 py-3 text-sm border border-slate-100">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500">Sets won</span>
+                <span class="font-mono text-slate-700">{{ livePreview.aSets }} – {{ livePreview.bSets }}</span>
+              </div>
+              <div class="mt-1 flex items-center justify-between">
+                <span class="text-slate-500">Projected winner</span>
+                <span v-if="livePreview.winnerName" class="font-semibold text-emerald-700">{{ livePreview.winnerName }}</span>
+                <span v-else-if="livePreview.invalid" class="text-amber-600">Incomplete / invalid set</span>
+                <span v-else class="text-slate-400">Not decided yet</span>
+              </div>
+            </div>
+
+            <div v-if="resultForm.errors.sets" class="mt-2 text-sm text-red-600">{{ resultForm.errors.sets }}</div>
+            <div v-if="walkoverForm.errors.winner_team_id" class="mt-2 text-sm text-red-600">{{ walkoverForm.errors.winner_team_id }}</div>
+
+            <div class="mt-3 flex flex-col gap-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  class="btn-primary text-sm"
+                  :disabled="resultForm.processing || filledSets().length === 0"
+                  @click="saveResult(m)"
+                >
+                  Save result
+                </button>
+                <button
+                  v-if="isCompleted(m)"
+                  type="button"
+                  class="btn-secondary text-sm"
+                  :disabled="resetForm.processing"
+                  @click="resetResult(m)"
+                >
+                  Reset
+                </button>
+              </div>
+              <div class="flex flex-col sm:flex-row sm:items-center gap-2 border-t border-slate-100 pt-3">
+                <select v-model="editor.walkoverWinner" class="input sm:flex-1" aria-label="Walkover winner">
+                  <option value="">— Winner by walkover —</option>
+                  <option :value="m.teamA?.id">{{ teamName(m.teamA) }}</option>
+                  <option :value="m.teamB?.id">{{ teamName(m.teamB) }}</option>
+                </select>
+                <button
+                  type="button"
+                  class="btn-secondary text-sm whitespace-nowrap"
+                  :disabled="walkoverForm.processing || !editor.walkoverWinner"
+                  @click="declareWalkover(m)"
+                >
+                  Walkover
+                </button>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -227,36 +486,145 @@ function resetFilters() {
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          <tr v-for="m in filtered" :key="m.id" class="hover:bg-slate-50">
-            <td class="px-4 py-3 text-slate-500">{{ m.categoryName || '—' }}</td>
-            <td class="px-4 py-3 text-slate-500">{{ stageLabel(m.stage) }}</td>
-            <td class="px-4 py-3 text-slate-500 font-mono">{{ m.round_number ?? '—' }}</td>
-            <td class="px-4 py-3 font-medium text-slate-900">
-              {{ teamName(m.teamA) }} <span class="text-slate-400 font-normal">vs</span> {{ teamName(m.teamB) }}
-            </td>
-            <td class="px-4 py-3">
-              <template v-if="isCompleted(m)">
-                <div class="font-mono text-slate-700">{{ scoreSummary(m) || '—' }}</div>
-                <div v-if="m.winnerName" class="text-xs text-emerald-700 font-medium">{{ m.winnerName }}</div>
-              </template>
-              <span v-else class="text-slate-300">—</span>
-            </td>
-            <td class="px-4 py-3 text-slate-500">{{ m.courtName || '—' }}</td>
-            <td class="px-4 py-3 text-slate-500">{{ formatSchedule(m.scheduledAt) }}</td>
-            <td class="px-4 py-3">
-              <span :class="statusChip(m.status)">{{ statusLabel(m.status) }}</span>
-            </td>
-            <td class="px-4 py-3">
-              <div class="flex items-center justify-end gap-2">
-                <Link
-                  :href="route('admin.matches.edit', { match: m.id })"
-                  class="btn-secondary text-xs px-3 py-1.5"
+          <template v-for="m in filtered" :key="m.id">
+            <tr class="hover:bg-slate-50" :class="{ 'bg-slate-50': isOpen(m) }">
+              <td class="px-4 py-3 text-slate-500">{{ m.categoryName || '—' }}</td>
+              <td class="px-4 py-3 text-slate-500">{{ stageLabel(m.stage) }}</td>
+              <td class="px-4 py-3 text-slate-500 font-mono">{{ m.round_number ?? '—' }}</td>
+              <td class="px-4 py-3 font-medium text-slate-900">
+                {{ teamName(m.teamA) }} <span class="text-slate-400 font-normal">vs</span> {{ teamName(m.teamB) }}
+              </td>
+              <td class="px-4 py-3">
+                <template v-if="isCompleted(m)">
+                  <div class="font-mono text-slate-700">{{ scoreSummary(m) || '—' }}</div>
+                  <div v-if="m.winnerName" class="text-xs text-emerald-700 font-medium">{{ m.winnerName }}</div>
+                </template>
+                <span v-else class="text-slate-300">—</span>
+              </td>
+              <td class="px-4 py-3 text-slate-500">{{ m.courtName || '—' }}</td>
+              <td class="px-4 py-3 text-slate-500">{{ formatSchedule(m.scheduledAt) }}</td>
+              <td class="px-4 py-3">
+                <span :class="statusChip(m.status)">{{ statusLabel(m.status) }}</span>
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-end gap-2">
+                  <button type="button" class="btn-primary text-xs px-3 py-1.5" @click="openEditor(m)">
+                    {{ isOpen(m) ? 'Close' : resultLabel(m) }}
+                  </button>
+                  <Link
+                    :href="route('admin.matches.edit', { match: m.id })"
+                    class="btn-secondary text-xs px-3 py-1.5"
+                  >
+                    Edit
+                  </Link>
+                </div>
+              </td>
+            </tr>
+            <!-- Inline result editor (desktop, expanding detail row) -->
+            <tr v-if="isOpen(m)" class="bg-slate-50">
+              <td colspan="9" class="px-4 py-4">
+                <!-- Teams not determined -->
+                <div
+                  v-if="!m.teamsResolved"
+                  class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 max-w-2xl"
                 >
-                  Edit
-                </Link>
-              </div>
-            </td>
-          </tr>
+                  Teams not determined yet — resolve the bracket first.
+                </div>
+                <div v-else class="max-w-2xl">
+                  <p class="text-xs text-slate-500 mb-3">
+                    Best of {{ maxSets(m) }} ·
+                    to {{ m.scoringConfig.pointsToWin }} pts ·
+                    win {{ m.scoringConfig.setsToWin }} set{{ m.scoringConfig.setsToWin > 1 ? 's' : '' }} ·
+                    cap {{ m.scoringConfig.deuceCap }}. Fill only sets that were played.
+                  </p>
+
+                  <div class="grid grid-cols-[3rem_1fr_1fr] gap-3 text-xs uppercase tracking-wider text-slate-400 mb-1">
+                    <div></div>
+                    <div class="truncate">{{ teamName(m.teamA) }}</div>
+                    <div class="truncate">{{ teamName(m.teamB) }}</div>
+                  </div>
+
+                  <div class="space-y-2">
+                    <div
+                      v-for="(row, i) in editor.rows"
+                      :key="i"
+                      class="grid grid-cols-[3rem_1fr_1fr] gap-3 items-center"
+                    >
+                      <div class="text-sm font-medium text-slate-600">Set {{ i + 1 }}</div>
+                      <input
+                        v-model="row.a"
+                        type="number"
+                        min="0"
+                        inputmode="numeric"
+                        class="input"
+                        :aria-label="`Set ${i + 1} ${teamName(m.teamA)} score`"
+                      />
+                      <input
+                        v-model="row.b"
+                        type="number"
+                        min="0"
+                        inputmode="numeric"
+                        class="input"
+                        :aria-label="`Set ${i + 1} ${teamName(m.teamB)} score`"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Live winner preview -->
+                  <div v-if="livePreview" class="mt-3 rounded-lg bg-white px-4 py-3 text-sm border border-slate-100">
+                    <div class="flex items-center justify-between">
+                      <span class="text-slate-500">Sets won</span>
+                      <span class="font-mono text-slate-700">{{ livePreview.aSets }} – {{ livePreview.bSets }}</span>
+                    </div>
+                    <div class="mt-1 flex items-center justify-between">
+                      <span class="text-slate-500">Projected winner</span>
+                      <span v-if="livePreview.winnerName" class="font-semibold text-emerald-700">{{ livePreview.winnerName }}</span>
+                      <span v-else-if="livePreview.invalid" class="text-amber-600">Incomplete / invalid set</span>
+                      <span v-else class="text-slate-400">Not decided yet</span>
+                    </div>
+                  </div>
+
+                  <div v-if="resultForm.errors.sets" class="mt-2 text-sm text-red-600">{{ resultForm.errors.sets }}</div>
+                  <div v-if="walkoverForm.errors.winner_team_id" class="mt-2 text-sm text-red-600">{{ walkoverForm.errors.winner_team_id }}</div>
+
+                  <div class="mt-3 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      class="btn-primary text-sm"
+                      :disabled="resultForm.processing || filledSets().length === 0"
+                      @click="saveResult(m)"
+                    >
+                      Save result
+                    </button>
+                    <button
+                      v-if="isCompleted(m)"
+                      type="button"
+                      class="btn-secondary text-sm"
+                      :disabled="resetForm.processing"
+                      @click="resetResult(m)"
+                    >
+                      Reset
+                    </button>
+                    <div class="flex items-center gap-2 ml-auto">
+                      <select v-model="editor.walkoverWinner" class="input" aria-label="Walkover winner">
+                        <option value="">— Winner by walkover —</option>
+                        <option :value="m.teamA?.id">{{ teamName(m.teamA) }}</option>
+                        <option :value="m.teamB?.id">{{ teamName(m.teamB) }}</option>
+                      </select>
+                      <button
+                        type="button"
+                        class="btn-secondary text-sm whitespace-nowrap"
+                        :disabled="walkoverForm.processing || !editor.walkoverWinner"
+                        @click="declareWalkover(m)"
+                      >
+                        Walkover
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>

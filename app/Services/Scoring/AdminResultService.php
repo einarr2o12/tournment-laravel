@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\BracketSeeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -265,6 +266,12 @@ final class AdminResultService
 
     /**
      * Refresh and broadcast so the realtime layer sees the admin change.
+     *
+     * The result is already committed by the time we get here, so a dead
+     * WebSocket server (Reverb/Pusher down) must never bubble up and 500 the
+     * admin's result-entry request. We swallow + log any broadcast failure: the
+     * realtime push is best-effort; the persisted data is the source of truth
+     * and the UI can always refetch.
      */
     private function broadcast(GameMatch $match): void
     {
@@ -273,6 +280,13 @@ final class AdminResultService
             'teamA', 'teamB', 'winner', 'sets',
         ]) ?? $match;
 
-        MatchUpdated::dispatch($fresh);
+        try {
+            MatchUpdated::dispatch($fresh);
+        } catch (\Throwable $e) {
+            Log::warning('MatchUpdated broadcast failed (realtime push skipped).', [
+                'match_id' => $match->getKey(),
+                'exception' => $e->getMessage(),
+            ]);
+        }
     }
 }

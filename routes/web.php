@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Admin\BracketController as AdminBracketController;
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\CourtController as AdminCourtController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\GroupController as AdminGroupController;
 use App\Http\Controllers\Admin\MatchController as AdminMatchController;
 use App\Http\Controllers\Admin\PlayerController as AdminPlayerController;
+use App\Http\Controllers\Admin\StandingsController as AdminStandingsController;
 use App\Http\Controllers\Admin\TeamController as AdminTeamController;
 use App\Http\Controllers\Admin\TournamentController as AdminTournamentController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
@@ -129,6 +131,12 @@ Route::middleware(['auth', 'role:ADMIN'])
 
         // Groups — read-only view.
         Route::get('groups', [AdminGroupController::class, 'index'])->name('groups.index');
+
+        // Standings — read-only round-robin tables (per group, per category).
+        Route::get('standings', [AdminStandingsController::class, 'index'])->name('standings.index');
+
+        // Bracket — read-only knockout tree (semifinals / final / third place).
+        Route::get('bracket', [AdminBracketController::class, 'index'])->name('bracket.index');
 
         // Users — full CRUD (manage referees/admins).
         Route::get('users', [AdminUserController::class, 'index'])->name('users.index');

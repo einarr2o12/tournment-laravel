@@ -1,0 +1,42 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies (rebuilt inside the image)
+node_modules
+vendor
+
+# Frontend build output — the frontend stage rebuilds this from source
+public/build
+public/hot
+
+# Local env / secrets — never bake into the image
+.env
+.env.*
+!.env.railway.example
+
+# Local dev tooling
+compose.yaml
+docker-compose.yml
+.editorconfig
+.phpunit.result.cache
+.npmrc
+.DS_Store
+.claude
+
+# Generated reports (large, runtime artifacts)
+reports/*.json
+reports/*.xlsx
+
+# Storage logs and runtime state
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+
+# Tests & docs not needed at runtime
+tests
+README.md
+DEPLOY.md
+TOURNAMENT_NOTES.md

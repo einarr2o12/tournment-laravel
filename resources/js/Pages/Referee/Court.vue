@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
-import { connectEcho } from '../../bootstrap';
+import { connectEcho, type ReverbConfig } from '../../bootstrap';
 
 type Team = {
   id: string;
@@ -144,7 +144,8 @@ let echoChannel: { stopListening?: (event: string) => void } | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(() => {
-  const echo = connectEcho();
+  const reverb = usePage().props.reverb as ReverbConfig | null;
+  const echo = connectEcho(reverb);
   const w = window as unknown as {
     Echo?: {
       channel: (name: string) => {

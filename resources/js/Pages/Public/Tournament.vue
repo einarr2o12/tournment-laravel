@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
-import { connectEcho } from '../../bootstrap';
+import { connectEcho, type ReverbConfig } from '../../bootstrap';
 
 interface Team {
   id: string;
@@ -290,7 +290,8 @@ function onVisibilityChange() {
 }
 
 onMounted(() => {
-  const echo = connectEcho();
+  const reverb = usePage().props.reverb as ReverbConfig | null;
+  const echo = connectEcho(reverb);
   if (echo && typeof window !== 'undefined' && window.Echo) {
     window.Echo
       .channel(channelName.value)

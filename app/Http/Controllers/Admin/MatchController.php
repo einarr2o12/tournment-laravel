@@ -41,6 +41,9 @@ class MatchController extends Controller
     {
         $matches = MatchModel::query()
             ->with($this->eagerLoads())
+            // tournament is needed by configForMatch(); load once here to avoid
+            // an N+1 across every match row.
+            ->with('tournament')
             ->with(['sets' => fn ($q) => $q->orderBy('set_number')])
             ->orderByRaw('scheduled_at IS NULL, scheduled_at ASC')
             ->orderBy('created_at')
@@ -49,6 +52,15 @@ class MatchController extends Controller
                 $row = $this->serialize($m);
                 $row['sets'] = $this->serializeSets($m);
                 $row['winnerName'] = $this->winnerName($m);
+
+                // Per-match, stage-aware scoring config so the list can host an
+                // inline result editor (same source the Edit page uses).
+                $config = $this->scoring->configForMatch($m);
+                $row['scoringConfig'] = [
+                    'pointsToWin' => $config['pointsToWin'],
+                    'setsToWin' => $config['setsToWin'],
+                    'deuceCap' => $config['deuceCap'],
+                ];
 
                 return $row;
             })
@@ -99,9 +111,8 @@ class MatchController extends Controller
 
         $this->results->recordResult($match, $request->sets(), $request->user());
 
-        return redirect()
-            ->route('admin.matches.edit', ['match' => $match->id])
-            ->with('success', 'Result recorded.');
+        // back() keeps inline list editing on the list; the Edit page returns to Edit.
+        return redirect()->back()->with('success', 'Result recorded.');
     }
 
     /**
@@ -133,9 +144,7 @@ class MatchController extends Controller
 
         $this->results->walkover($match, $winner, $request->user());
 
-        return redirect()
-            ->route('admin.matches.edit', ['match' => $match->id])
-            ->with('success', 'Walkover recorded.');
+        return redirect()->back()->with('success', 'Walkover recorded.');
     }
 
     /**
@@ -147,9 +156,7 @@ class MatchController extends Controller
     {
         $this->results->resetResult($match);
 
-        return redirect()
-            ->route('admin.matches.edit', ['match' => $match->id])
-            ->with('success', 'Result cleared.');
+        return redirect()->back()->with('success', 'Result cleared.');
     }
 
     /**

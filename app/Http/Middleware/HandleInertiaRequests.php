@@ -50,6 +50,26 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+            // Reverb (websocket) connection details for the frontend Echo
+            // client. Sourced from runtime config so the production reverb
+            // domain is NOT baked into the Vite build — changing it only
+            // requires a backend env change + config:cache. Returns null
+            // when key/host are absent so the frontend falls back to polling.
+            'reverb' => function () {
+                $key = config('broadcasting.connections.reverb.key');
+                $host = config('broadcasting.connections.reverb.options.host');
+
+                if (! $key || ! $host) {
+                    return null;
+                }
+
+                return [
+                    'key' => $key,
+                    'host' => $host,
+                    'port' => (int) config('broadcasting.connections.reverb.options.port', 443),
+                    'scheme' => config('broadcasting.connections.reverb.options.scheme', 'https'),
+                ];
+            },
         ];
     }
 }

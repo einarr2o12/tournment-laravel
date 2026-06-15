@@ -13,6 +13,7 @@ use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -461,7 +462,19 @@ final class ScoringService
     private function broadcast(GameMatch $match): GameMatch
     {
         $fresh = $match->fresh($this->matchEagerLoads()) ?? $match;
-        MatchUpdated::dispatch($fresh);
+
+        // The DB transaction has already committed by the time we get here, so
+        // the score is durable. A broadcast failure (e.g. Reverb down) must
+        // never 500 the referee's request — log and swallow it. Clients can
+        // refetch the persisted state.
+        try {
+            MatchUpdated::dispatch($fresh);
+        } catch (\Throwable $e) {
+            Log::warning('MatchUpdated broadcast failed', [
+                'match_id' => $fresh->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return $fresh;
     }

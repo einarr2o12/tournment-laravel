@@ -16,34 +16,48 @@ window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 window.Pusher = Pusher;
 
 /**
+ * Reverb connection settings shared from the backend via Inertia props
+ * (HandleInertiaRequests::share() -> 'reverb'). Resolved at RUNTIME from
+ * backend env, so the reverb domain is not baked into the Vite build.
+ */
+export interface ReverbConfig {
+  key: string;
+  host: string;
+  port?: number | null;
+  scheme?: string | null;
+}
+
+/**
  * Lazily create the Echo client. Call this from pages that actually need
  * real-time channels (referee scoring, public live view) — NOT at boot.
  *
  * Booting Echo eagerly makes every page (login, admin shell, etc.) open
  * a WS to Reverb, which spams the console when Reverb isn't running.
+ *
+ * Pass the shared `reverb` prop from Inertia (`usePage().props.reverb`).
+ * Returns null when no config is available (key/host missing) so callers
+ * can fall back to polling.
  */
-export function connectEcho(): Echo<'reverb'> | null {
+export function connectEcho(
+  config?: ReverbConfig | null,
+): Echo<'reverb'> | null {
   if (typeof window === 'undefined') return null;
   if (window.Echo) return window.Echo;
 
-  const key = import.meta.env.VITE_REVERB_APP_KEY;
-  const host = import.meta.env.VITE_REVERB_HOST;
+  const key = config?.key;
+  const host = config?.host;
   if (!key || !host) return null;
 
-  // Only attempt a websocket when the page is actually served from the
-  // configured Reverb host. A phone hitting the app via ngrok has a
-  // different hostname and can't reach ws://localhost:8080 — skipping
-  // here lets callers fall back to polling instead of spamming the
-  // console with doomed reconnect attempts.
-  if (window.location.hostname !== host) return null;
+  const port = Number(config?.port ?? 443);
+  const forceTLS = (config?.scheme ?? 'https') === 'https';
 
   window.Echo = new Echo({
     broadcaster: 'reverb',
     key,
     wsHost: host,
-    wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
-    wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
-    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'http') === 'https',
+    wsPort: port,
+    wssPort: port,
+    forceTLS,
     enabledTransports: ['ws', 'wss'],
   });
 

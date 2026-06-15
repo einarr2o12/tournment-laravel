@@ -38,6 +38,8 @@ const nav: NavItem[] = [
   { label: 'Teams', routeName: 'admin.teams.index', match: 'admin.teams.', icon: '👥' },
   { label: 'Matches', routeName: 'admin.matches.index', match: 'admin.matches.', icon: '🆚' },
   { label: 'Groups', routeName: 'admin.groups.index', match: 'admin.groups.', icon: '🔢' },
+  { label: 'Standings', routeName: 'admin.standings.index', match: 'admin.standings.', icon: '📈' },
+  { label: 'Bracket', routeName: 'admin.bracket.index', match: 'admin.bracket.', icon: '🪜' },
   { label: 'Users', routeName: 'admin.users.index', match: 'admin.users.', icon: '🔐' },
 ];
 
