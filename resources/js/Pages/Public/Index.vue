@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
+import { useI18n } from 'vue-i18n';
 import { route } from 'ziggy-js';
+import PublicLayout from '../../Layouts/PublicLayout.vue';
 
 interface TournamentSummary {
   id: string;
@@ -17,12 +19,36 @@ const props = defineProps<{
   tournaments: TournamentSummary[];
 }>();
 
-function formatDateRange(start: string | null | undefined, end: string | null | undefined) {
-  if (!start) return '—';
-  const s = new Date(start);
-  if (!end) return s.toLocaleDateString();
-  const e = new Date(end);
-  return `${s.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${e.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+const { t } = useI18n();
+
+// ---- date range (Asia/Yangon, matches MatchCard's tz) ----
+const TZ = 'Asia/Yangon';
+function fmtDay(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: TZ,
+    day: '2-digit',
+    month: 'short',
+  })
+    .format(d)
+    .toUpperCase();
+}
+function dateRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): string {
+  const s = fmtDay(start);
+  if (!s) return '—';
+  const e = fmtDay(end);
+  return !e || e === s ? s : `${s} – ${e}`;
+}
+
+function formatLabel(format: string): string {
+  const key = `formats.${format}`;
+  const tr = t(key);
+  return tr === key ? format : tr;
 }
 
 const live = computed(() =>
@@ -34,122 +60,141 @@ const upcoming = computed(() =>
 const past = computed(() =>
   props.tournaments.filter((ti) => ti.status === 'COMPLETED'),
 );
+
+type Kind = 'live' | 'upcoming' | 'past';
+const sections = computed<
+  { kind: Kind; label: string; items: TournamentSummary[] }[]
+>(() => [
+  { kind: 'live', label: 'Live now', items: live.value },
+  { kind: 'upcoming', label: 'Upcoming', items: upcoming.value },
+  { kind: 'past', label: 'Past', items: past.value },
+]);
 </script>
 
 <template>
-  <Head title="Tournaments" />
-  <div class="min-h-screen flex flex-col">
-    <!-- HERO -->
-    <header class="gradient-hero text-white">
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
-        <Link :href="route('public.index')" class="text-lg sm:text-xl font-bold text-white truncate">
-          🏸 Tournament Service
-        </Link>
-        <nav class="flex items-center gap-2">
-          <Link
-            :href="route('login')"
-            class="btn-primary bg-white text-brand-700 hover:bg-slate-100"
-          >
-            Login
-          </Link>
-        </nav>
-      </div>
+  <Head :title="t('public.title')" />
 
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-20 text-center">
-        <h1 class="text-display text-6xl sm:text-8xl tracking-tight leading-[0.9]">
-          Live Tournaments
+  <PublicLayout>
+    <!-- slim dark hero title/meta (under the shell's logo bar) -->
+    <template #hero>
+      <div class="pt-4">
+        <p class="bwf-label">{{ t('brand.tagline') }}</p>
+        <h1
+          class="mt-1 text-3xl font-bold tracking-tight text-[var(--color-bwf-text)] sm:text-4xl"
+        >
+          {{ t('public.title') }}
         </h1>
-        <p class="mt-5 text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
-          Follow scores in real time
+        <p class="mt-1.5 text-sm text-[var(--color-bwf-text-2)]">
+          {{ t('public.subtitle') }}
         </p>
       </div>
-    </header>
+    </template>
 
-    <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-10 space-y-10">
-      <div v-if="tournaments.length === 0" class="card text-center py-16">
-        <div class="text-6xl mb-4">🏸</div>
-        <p class="text-xl text-slate-600">No tournaments yet</p>
-      </div>
-      <template v-else>
-        <!-- LIVE NOW -->
-        <section v-if="live.length > 0">
-          <div class="flex items-baseline gap-3 mb-4">
-            <h2 class="text-display text-3xl sm:text-4xl text-slate-900 leading-none">
-              Live now
-            </h2>
-            <span class="live-dot"></span>
-          </div>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Link
-              v-for="ti in live"
-              :key="ti.id"
-              :href="route('public.tournament.show', { tournament: ti.id })"
-              class="group relative overflow-hidden rounded-2xl bg-slate-900 text-white ring-1 ring-live-500/30 shadow-xl p-6 transition hover:ring-live-500/60"
+    <!-- EMPTY -->
+    <div
+      v-if="tournaments.length === 0"
+      class="bwf-surface flex flex-col items-center justify-center px-6 py-20 text-center"
+    >
+      <div class="mb-3 text-5xl">🏸</div>
+      <p class="text-base text-[var(--color-bwf-text-2)]">
+        {{ t('public.noTournaments') }}
+      </p>
+    </div>
+
+    <!-- SECTIONS -->
+    <div v-else class="space-y-10">
+      <section
+        v-for="sec in sections"
+        v-show="sec.items.length"
+        :key="sec.kind"
+      >
+        <!-- section header -->
+        <div class="mb-3 flex items-center gap-2.5">
+          <span
+            class="h-4 w-1 rounded-full"
+            :class="
+              sec.kind === 'live'
+                ? 'bg-[var(--color-bwf-green)]'
+                : sec.kind === 'upcoming'
+                  ? 'bg-[var(--color-bwf-red)]'
+                  : 'bg-[var(--color-bwf-hairline)]'
+            "
+          />
+          <h2 class="bwf-label text-sm tracking-[0.16em]">{{ sec.label }}</h2>
+          <span class="bwf-seed">{{ sec.items.length }}</span>
+        </div>
+
+        <!-- card grid -->
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            v-for="ti in sec.items"
+            :key="ti.id"
+            :href="route('public.tournament.show', { tournament: ti.id })"
+            class="group bwf-surface flex flex-col gap-3 p-4 transition hover:ring-white/15 sm:p-5"
+            :class="
+              sec.kind === 'live'
+                ? 'ring-[var(--color-bwf-green)]/20 hover:ring-[var(--color-bwf-green)]/40'
+                : ''
+            "
+          >
+            <!-- status chip row -->
+            <div class="flex items-center justify-between gap-2">
+              <span v-if="sec.kind === 'live'" class="bwf-chip-live">
+                <span class="bwf-dot bwf-dot-live" />
+                {{ t('match.status.IN_PROGRESS') }}
+              </span>
+              <span
+                v-else-if="sec.kind === 'upcoming'"
+                class="bwf-label rounded-full bg-[var(--color-bwf-raised)] px-2.5 py-0.5 text-[var(--color-bwf-text-2)] ring-1 ring-inset ring-white/5"
+              >
+                {{ t('statuses.SCHEDULED') }}
+              </span>
+              <span
+                v-else
+                class="bwf-label rounded-full bg-[var(--color-bwf-raised)] px-2.5 py-0.5 ring-1 ring-inset ring-white/5"
+              >
+                {{ t('statuses.COMPLETED') }}
+              </span>
+              <span
+                class="text-[var(--color-bwf-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--color-bwf-text-2)]"
+                aria-hidden="true"
+                >→</span
+              >
+            </div>
+
+            <!-- name -->
+            <h3
+              class="text-lg font-bold leading-tight tracking-tight text-[var(--color-bwf-text)]"
             >
-              <div class="flex items-center justify-between mb-4">
-                <span class="chip bg-live-500/20 text-live-400 ring-live-500/30">
-                  <span class="live-dot mr-1.5"></span>
-                  LIVE
-                </span>
-                <span class="text-display text-xl text-slate-400 leading-none">→</span>
-              </div>
-              <h3 class="text-display text-3xl leading-tight mb-3">{{ ti.name }}</h3>
-              <div class="text-sm text-slate-300 space-y-1">
-                <div v-if="ti.venue">📍 {{ ti.venue }}</div>
-                <div>🗓 {{ formatDateRange(ti.startDate, ti.endDate) }}</div>
-                <div class="text-slate-400">{{ ti.format }}</div>
-              </div>
-            </Link>
-          </div>
-        </section>
+              {{ ti.name }}
+            </h3>
 
-        <!-- UPCOMING -->
-        <section v-if="upcoming.length > 0">
-          <h2 class="text-display text-3xl sm:text-4xl text-slate-900 mb-4 leading-none">
-            Upcoming
-          </h2>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Link
-              v-for="ti in upcoming"
-              :key="ti.id"
-              :href="route('public.tournament.show', { tournament: ti.id })"
-              class="group relative overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 hover:ring-brand-400 shadow-sm p-6 transition"
-            >
-              <span class="chip-soon mb-3 inline-flex">{{ ti.status }}</span>
-              <h3 class="text-display text-2xl text-slate-900 mb-3">{{ ti.name }}</h3>
-              <div class="text-sm text-slate-600 space-y-1">
-                <div v-if="ti.venue">📍 {{ ti.venue }}</div>
-                <div>🗓 {{ formatDateRange(ti.startDate, ti.endDate) }}</div>
-                <div class="text-slate-400">{{ ti.format }}</div>
+            <!-- meta -->
+            <div class="mt-auto space-y-1.5 pt-1">
+              <div
+                v-if="ti.venue"
+                class="flex items-center gap-1.5 text-sm text-[var(--color-bwf-text-2)]"
+              >
+                <span class="text-[var(--color-bwf-muted)]">📍</span>
+                <span class="truncate">{{ ti.venue }}</span>
               </div>
-            </Link>
-          </div>
-        </section>
-
-        <!-- PAST -->
-        <section v-if="past.length > 0">
-          <h2 class="text-display text-3xl sm:text-4xl text-slate-500 mb-4 leading-none">
-            Past
-          </h2>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Link
-              v-for="ti in past"
-              :key="ti.id"
-              :href="route('public.tournament.show', { tournament: ti.id })"
-              class="rounded-xl bg-white ring-1 ring-slate-200 p-4 hover:ring-slate-300 transition"
-            >
-              <h3 class="font-semibold text-slate-700">{{ ti.name }}</h3>
-              <div class="text-xs text-slate-400 mt-1">
-                {{ formatDateRange(ti.startDate, ti.endDate) }}
+              <div
+                class="flex items-center gap-1.5 text-sm text-[var(--color-bwf-text-2)]"
+              >
+                <span class="text-[var(--color-bwf-muted)]">🗓</span>
+                <span class="bwf-score text-[var(--color-bwf-text-2)]">{{
+                  dateRange(ti.startDate, ti.endDate)
+                }}</span>
               </div>
-            </Link>
-          </div>
-        </section>
-      </template>
-    </main>
+            </div>
 
-    <footer class="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-400">
-      Tournament Service · BWF rules
-    </footer>
-  </div>
+            <!-- bottom strip: format -->
+            <div class="flex items-center border-t bwf-hairline pt-2.5">
+              <span class="bwf-label">{{ formatLabel(ti.format) }}</span>
+            </div>
+          </Link>
+        </div>
+      </section>
+    </div>
+  </PublicLayout>
 </template>

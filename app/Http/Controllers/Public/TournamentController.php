@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Public;
 
+use App\Enums\CategoryType;
+use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
 use App\Enums\TournamentStatus;
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Court;
 use App\Models\Group;
 use App\Models\MatchModel;
@@ -69,7 +72,16 @@ class TournamentController extends Controller
                 ->orderBy('display_order'),
             'categories' => fn ($q) => $q
                 ->select(['id', 'tournament_id', 'type', 'name'])
-                ->orderBy('name'),
+                ->orderBy('name')
+                ->with([
+                    'teams' => fn ($q) => $q
+                        ->select(['id', 'category_id', 'display_name', 'seed'])
+                        ->orderByRaw('seed IS NULL, seed ASC')
+                        ->orderBy('display_name')
+                        ->with(['players' => fn ($q) => $q
+                            ->select(['players.id', 'players.full_name', 'players.club'])
+                            ->orderBy('team_players.position')]),
+                ]),
         ]);
 
         $courts = $tournament->courts->map(fn (Court $c): array => [
@@ -91,7 +103,33 @@ class TournamentController extends Controller
             'live' => $this->buildLive($tournament),
             'matches' => $this->buildMatches($tournament),
             'standings' => $this->buildStandings($tournament),
+            'players' => $this->buildPlayers($tournament),
         ]);
+    }
+
+    /**
+     * Build the flat per-category roster used by the public Players tab.
+     * Categories (and their teams + players) are already eager loaded in
+     * show() to avoid N+1.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buildPlayers(Tournament $tournament): array
+    {
+        return $tournament->categories->map(fn (Category $category): array => [
+            'categoryId' => $category->getKey(),
+            'categoryName' => $category->name,
+            'categoryCode' => $this->shortCategoryCode($category->type),
+            'teams' => $category->teams->map(fn ($team): array => [
+                'id' => $team->getKey(),
+                'seed' => $team->seed,
+                'displayName' => $team->display_name ?? '',
+                'players' => $team->players->map(fn ($p): array => [
+                    'fullName' => $p->full_name,
+                    'club' => $p->club,
+                ])->values()->all(),
+            ])->values()->all(),
+        ])->values()->all();
     }
 
     /**
@@ -296,7 +334,13 @@ class TournamentController extends Controller
             'category:id,tournament_id,type,name',
             'court:id,name',
             'teamA:id,category_id,display_name,seed',
+            'teamA.players' => fn ($q) => $q
+                ->select(['players.id', 'players.full_name', 'players.club'])
+                ->orderBy('team_players.position'),
             'teamB:id,category_id,display_name,seed',
+            'teamB.players' => fn ($q) => $q
+                ->select(['players.id', 'players.full_name', 'players.club'])
+                ->orderBy('team_players.position'),
             'sets' => fn ($q) => $q->orderBy('set_number'),
         ];
     }
@@ -314,14 +358,18 @@ class TournamentController extends Controller
             'id' => $match->getKey(),
             'status' => $match->status?->value,
             'stage' => $match->stage?->value,
+            'stageLabel' => $this->shortStageLabel($match->stage),
             'roundNumber' => $match->round_number,
             'bracketSlot' => $match->bracket_slot,
             'nextMatchId' => $match->next_match_id,
             'loserNextMatchId' => $match->loser_next_match_id,
             'scheduledAt' => $match->scheduled_at?->toIso8601String(),
+            'startedAt' => $match->started_at?->toIso8601String(),
+            'completedAt' => $match->completed_at?->toIso8601String(),
             'categoryId' => $match->category_id,
             'categoryName' => $match->category?->name,
             'categoryType' => $match->category?->type?->value,
+            'categoryCode' => $this->shortCategoryCode($match->category?->type),
             'teamA' => $this->serializeTeam($match->teamA),
             'teamB' => $this->serializeTeam($match->teamB),
             'teamASource' => $match->team_a_source,
@@ -330,12 +378,48 @@ class TournamentController extends Controller
                 'id' => $match->court->getKey(),
                 'name' => $match->court->name,
             ] : null,
+            'courtName' => $match->court?->name,
             'winnerId' => $match->winner_id,
             'sets' => $match->sets->map(fn ($s): array => [
                 'teamAScore' => (int) $s->team_a_score,
                 'teamBScore' => (int) $s->team_b_score,
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * Map a CategoryType to its BWF short code (MS/WS/MD/WD/XD). Returns
+     * an empty string when the type is unknown/null.
+     */
+    private function shortCategoryCode(?CategoryType $type): string
+    {
+        return match ($type) {
+            CategoryType::MENS_SINGLES => 'MS',
+            CategoryType::WOMENS_SINGLES => 'WS',
+            CategoryType::MENS_DOUBLES => 'MD',
+            CategoryType::WOMENS_DOUBLES => 'WD',
+            CategoryType::MIXED_DOUBLES => 'XD',
+            default => '',
+        };
+    }
+
+    /**
+     * Map a MatchStage to a compact label for the card header
+     * (Group / R64 / R32 / R16 / QF / SF / F / Bronze). Empty when null.
+     */
+    private function shortStageLabel(?MatchStage $stage): string
+    {
+        return match ($stage) {
+            MatchStage::GROUP => 'Group',
+            MatchStage::ROUND_OF_64 => 'R64',
+            MatchStage::ROUND_OF_32 => 'R32',
+            MatchStage::ROUND_OF_16 => 'R16',
+            MatchStage::QUARTERFINAL => 'QF',
+            MatchStage::SEMIFINAL => 'SF',
+            MatchStage::FINAL => 'F',
+            MatchStage::THIRD_PLACE => 'Bronze',
+            default => '',
+        };
     }
 
     /**
@@ -350,6 +434,13 @@ class TournamentController extends Controller
         return [
             'id' => $team->getKey(),
             'displayName' => $team->display_name ?? '',
+            'seed' => $team->seed,
+            'players' => $team->relationLoaded('players')
+                ? $team->players->map(fn ($p): array => [
+                    'fullName' => $p->full_name,
+                    'club' => $p->club,
+                ])->values()->all()
+                : [],
         ];
     }
 
