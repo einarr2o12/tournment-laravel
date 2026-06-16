@@ -2,7 +2,6 @@
 import { Link } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import { route } from 'ziggy-js';
-import LanguagePicker from '../Components/LanguagePicker.vue';
 
 const { t } = useI18n();
 </script>
@@ -13,7 +12,6 @@ const { t } = useI18n();
       <Link :href="route('public.index')" class="text-lg sm:text-xl font-bold text-white">
         🏸 {{ t('common.appName') }}
       </Link>
-      <LanguagePicker />
     </header>
 
     <main class="flex-1 flex items-center justify-center px-4 sm:px-6 py-8">

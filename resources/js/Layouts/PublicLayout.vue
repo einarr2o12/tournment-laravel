@@ -3,7 +3,6 @@ import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import { route } from 'ziggy-js';
-import LanguagePicker from '../Components/LanguagePicker.vue';
 
 interface AuthUser {
   id: number;
@@ -64,7 +63,6 @@ const hasTabs = computed(() => props.tabs.length > 0);
           🏸 {{ t('common.appName') }}
         </Link>
         <nav class="flex items-center gap-2">
-          <LanguagePicker />
           <template v-if="isAuthenticated">
             <Link
               v-if="isAdmin"

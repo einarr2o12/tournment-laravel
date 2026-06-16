@@ -368,6 +368,38 @@ const matchesByCourt = computed(() => {
 
 const hasAnyMatch = computed(() => matchesFiltered.value.length > 0);
 
+// Flat list of all (filtered) matches, ordered by time then court — the
+// "all matches" list view.
+const matchesSorted = computed<MatchDetail[]>(() =>
+  [...matchesFiltered.value].sort((a, b) => {
+    const d = byScheduled(a, b);
+    if (d !== 0) return d;
+    return (a.court?.name ?? '').localeCompare(b.court?.name ?? '', undefined, { numeric: true });
+  }),
+);
+
+function fmtTime(iso: string | null | undefined): string {
+  if (!iso) return 'TBD';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Yangon', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date(iso));
+}
+
+function scoreLine(m: MatchDetail): string {
+  if (!m.sets || m.sets.length === 0) return '';
+  return m.sets.map((s) => `${s.teamAScore}-${s.teamBScore}`).join('  ');
+}
+
+function isDone(m: MatchDetail): boolean {
+  return m.status === 'COMPLETED' || m.status === 'WALKOVER';
+}
+
+function winClass(m: MatchDetail, teamId: string | null | undefined): string {
+  return m.winnerId && teamId && m.winnerId === teamId
+    ? 'font-semibold text-[var(--color-bwf-text)]'
+    : 'text-[var(--color-bwf-text-2)]';
+}
+
 // State label for a court's match list: live = "Live", done = "Final", the
 // first upcoming = "Starts" and any later upcoming = "Followed By".
 function stateLabelFor(m: MatchDetail, indexInCourt: number, items: MatchDetail[]): string {
@@ -720,26 +752,64 @@ onUnmounted(() => {
         No matches scheduled yet.
       </div>
 
-      <!-- court-grouped sections -->
-      <div
-        v-for="section in matchesByCourt"
-        :key="section.court?.id ?? 'nocourt'"
-        class="space-y-4"
-      >
-        <div class="flex items-baseline gap-2 border-b bwf-hairline pb-2">
-          <h2 class="text-base font-bold tracking-tight text-[var(--color-bwf-text)]">
-            {{ section.court ? `Court ${section.court.name}` : 'Unscheduled' }}
-          </h2>
-          <span class="bwf-label">{{ section.items.length }} matches</span>
+      <!-- all matches: list view -->
+      <div v-if="hasAnyMatch" class="bwf-surface overflow-hidden">
+        <!-- column header (desktop) -->
+        <div
+          class="hidden grid-cols-[80px_1fr_140px_88px] gap-3 border-b bwf-hairline px-4 py-2 sm:grid"
+        >
+          <span class="bwf-label">Time</span>
+          <span class="bwf-label">Match</span>
+          <span class="bwf-label text-right">Score</span>
+          <span class="bwf-label text-right">Court</span>
         </div>
-        <div class="grid gap-5 pt-1 lg:grid-cols-2">
-          <MatchCard
-            v-for="(m, idx) in section.items"
-            :key="m.id"
-            :match="toCardMatch(m)"
-            :match-number="idx + 1"
-            :state-label="stateLabelFor(m, idx, section.items)"
-          />
+
+        <div
+          v-for="m in matchesSorted"
+          :key="m.id"
+          class="border-b bwf-hairline px-4 py-3 last:border-0 sm:grid sm:grid-cols-[80px_1fr_140px_88px] sm:items-center sm:gap-3"
+        >
+          <!-- time + state -->
+          <div class="flex items-center justify-between sm:block">
+            <div class="font-mono text-sm text-[var(--color-bwf-text)]">
+              {{ fmtTime(m.scheduledAt) }}
+            </div>
+            <div
+              class="bwf-label"
+              :class="isDone(m) ? 'text-[var(--color-bwf-red)]' : 'text-[var(--color-bwf-muted)]'"
+            >
+              {{ isDone(m) ? 'Final' : 'Scheduled' }}
+            </div>
+          </div>
+
+          <!-- match: code/round + the two sides -->
+          <div class="mt-2 sm:mt-0">
+            <div class="mb-1 flex items-center gap-2">
+              <span class="bwf-draw-code">{{ m.categoryCode ?? m.categoryName }}</span>
+              <span class="bwf-label text-[var(--color-bwf-text-2)]">{{ m.stageLabel ?? '' }}</span>
+            </div>
+            <div class="grid gap-0.5 text-sm">
+              <span :class="winClass(m, m.teamA?.id)">
+                {{ m.teamA?.displayName ?? 'TBD' }}
+                <span v-if="m.teamA?.seed" class="text-[var(--color-bwf-muted)]">({{ m.teamA.seed }})</span>
+              </span>
+              <span :class="winClass(m, m.teamB?.id)">
+                {{ m.teamB?.displayName ?? 'TBD' }}
+                <span v-if="m.teamB?.seed" class="text-[var(--color-bwf-muted)]">({{ m.teamB.seed }})</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- score -->
+          <div class="mt-2 font-mono text-sm sm:mt-0 sm:text-right">
+            <span v-if="scoreLine(m)" class="text-[var(--color-bwf-text)]">{{ scoreLine(m) }}</span>
+            <span v-else class="text-[var(--color-bwf-muted)]">—</span>
+          </div>
+
+          <!-- court -->
+          <div class="mt-1 text-xs text-[var(--color-bwf-text-2)] sm:mt-0 sm:text-right">
+            {{ m.court?.name ? `Court ${m.court.name}` : '—' }}
+          </div>
         </div>
       </div>
     </section>

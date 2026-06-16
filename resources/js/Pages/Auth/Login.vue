@@ -42,11 +42,6 @@ const messages = {
 
 type Locale = keyof typeof messages;
 
-const LOCALE_LABELS: Record<Locale, string> = {
-  en: 'EN',
-  my: 'မြန်မာ',
-};
-
 function readInitialLocale(): Locale {
   if (typeof window === 'undefined') return 'en';
   const stored = window.localStorage.getItem('locale');
@@ -56,13 +51,6 @@ function readInitialLocale(): Locale {
 
 const locale = ref<Locale>(readInitialLocale());
 const t = computed(() => messages[locale.value]);
-
-function setLocale(next: Locale) {
-  locale.value = next;
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem('locale', next);
-  }
-}
 
 const showPassword = ref(false);
 
@@ -98,18 +86,6 @@ function submit() {
       <Link :href="route('public.index')" class="text-lg font-bold text-white/90 hover:text-white">
         🏸 {{ t.title }}
       </Link>
-      <div class="inline-flex rounded-full bg-white/10 ring-1 ring-white/15 p-0.5 backdrop-blur-sm">
-        <button
-          v-for="(label, code) in LOCALE_LABELS"
-          :key="code"
-          type="button"
-          class="px-3 py-1 text-xs font-semibold rounded-full transition"
-          :class="locale === code ? 'bg-white text-brand-700' : 'text-white/80 hover:text-white'"
-          @click="setLocale(code as Locale)"
-        >
-          {{ label }}
-        </button>
-      </div>
     </header>
 
     <!-- CENTER -->

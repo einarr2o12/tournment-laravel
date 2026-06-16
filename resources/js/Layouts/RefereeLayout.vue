@@ -3,7 +3,6 @@ import { computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import { route } from 'ziggy-js';
-import LanguagePicker from '../Components/LanguagePicker.vue';
 
 interface AuthUser {
   id: number;
@@ -65,7 +64,6 @@ function logout() {
           </Link>
         </div>
         <div class="flex items-center gap-2 sm:gap-3 shrink-0">
-          <LanguagePicker />
           <span class="text-sm text-slate-600 hidden sm:inline truncate max-w-[10rem]">
             {{ userLabel }}
           </span>
