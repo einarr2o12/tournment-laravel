@@ -26,13 +26,16 @@ class AssignGroupsAndScheduleRr extends Command
      * @var array<string, array<int, array<int, int>>>
      */
     private array $spec = [
+        // Explicit official group assignments (override the seed snake-draft).
+        // Open Club A: Patrick(1) Bank(6) Zwe Htet(7) CNKha(8); B: Pudge(2) BLYone(3) Leo(4) Jimmy(5) Eiji(9).
         "Senior Men's Doubles (Open Club)" => [
-            'A' => [1, 4, 5, 8, 9],
-            'B' => [2, 3, 6, 7],
+            'A' => [1, 6, 7, 8],
+            'B' => [2, 3, 4, 5, 9],
         ],
+        // Sunday Club A: Zaw(4) Su Htoo(6) Sabai(7) Osborn(8); B: Luca(1) WHA(2) MK(3) Zwe Htet(5).
         "Senior Men's & Mixed Doubles (Sunday Club)" => [
-            'A' => [1, 4, 5, 8],
-            'B' => [2, 3, 6, 7],
+            'A' => [4, 6, 7, 8],
+            'B' => [1, 2, 3, 5],
         ],
         "Intermediate Men's Doubles" => [
             'A' => [1, 2, 3, 4, 5, 6, 7],
