@@ -428,7 +428,6 @@ function resultLabel(m: Match): string {
             </div>
 
             <div v-if="resultForm.errors.sets" class="mt-2 text-sm text-red-600">{{ resultForm.errors.sets }}</div>
-            <div v-if="walkoverForm.errors.winner_team_id" class="mt-2 text-sm text-red-600">{{ walkoverForm.errors.winner_team_id }}</div>
 
             <div class="mt-3 flex flex-col gap-3">
               <div class="flex flex-wrap items-center gap-2">
@@ -448,21 +447,6 @@ function resultLabel(m: Match): string {
                   @click="resetResult(m)"
                 >
                   Reset
-                </button>
-              </div>
-              <div class="flex flex-col sm:flex-row sm:items-center gap-2 border-t border-slate-100 pt-3">
-                <select v-model="editor.walkoverWinner" class="input sm:flex-1" aria-label="Walkover winner">
-                  <option value="">— Winner by walkover —</option>
-                  <option :value="m.teamA?.id">{{ teamName(m.teamA) }}</option>
-                  <option :value="m.teamB?.id">{{ teamName(m.teamB) }}</option>
-                </select>
-                <button
-                  type="button"
-                  class="btn-secondary text-sm whitespace-nowrap"
-                  :disabled="walkoverForm.processing || !editor.walkoverWinner"
-                  @click="declareWalkover(m)"
-                >
-                  Walkover
                 </button>
               </div>
             </div>
@@ -587,8 +571,7 @@ function resultLabel(m: Match): string {
                   </div>
 
                   <div v-if="resultForm.errors.sets" class="mt-2 text-sm text-red-600">{{ resultForm.errors.sets }}</div>
-                  <div v-if="walkoverForm.errors.winner_team_id" class="mt-2 text-sm text-red-600">{{ walkoverForm.errors.winner_team_id }}</div>
-
+      
                   <div class="mt-3 flex flex-wrap items-center gap-3">
                     <button
                       type="button"
@@ -607,21 +590,6 @@ function resultLabel(m: Match): string {
                     >
                       Reset
                     </button>
-                    <div class="flex items-center gap-2 ml-auto">
-                      <select v-model="editor.walkoverWinner" class="input" aria-label="Walkover winner">
-                        <option value="">— Winner by walkover —</option>
-                        <option :value="m.teamA?.id">{{ teamName(m.teamA) }}</option>
-                        <option :value="m.teamB?.id">{{ teamName(m.teamB) }}</option>
-                      </select>
-                      <button
-                        type="button"
-                        class="btn-secondary text-sm whitespace-nowrap"
-                        :disabled="walkoverForm.processing || !editor.walkoverWinner"
-                        @click="declareWalkover(m)"
-                      >
-                        Walkover
-                      </button>
-                    </div>
                   </div>
                 </div>
               </td>

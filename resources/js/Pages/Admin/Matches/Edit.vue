@@ -344,7 +344,6 @@ const isCompleted = computed(
 
         <!-- Backend validation errors -->
         <div v-if="resultForm.errors.sets" class="text-sm text-red-600">{{ resultForm.errors.sets }}</div>
-        <div v-if="walkoverForm.errors.winner_team_id" class="text-sm text-red-600">{{ walkoverForm.errors.winner_team_id }}</div>
 
         <!-- Actions -->
         <div class="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
@@ -365,26 +364,6 @@ const isCompleted = computed(
           >
             Reset to scheduled
           </button>
-        </div>
-
-        <!-- Walkover -->
-        <div class="border-t border-slate-100 pt-4">
-          <label class="label" for="walkover_winner">Walkover</label>
-          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-            <select id="walkover_winner" v-model="walkoverForm.winner_team_id" class="input sm:flex-1">
-              <option value="">— Winner by walkover —</option>
-              <option :value="teamAId">{{ teamAName }}</option>
-              <option :value="teamBId">{{ teamBName }}</option>
-            </select>
-            <button
-              type="button"
-              class="btn-secondary text-sm whitespace-nowrap"
-              :disabled="walkoverForm.processing || !walkoverForm.winner_team_id"
-              @click="declareWalkover"
-            >
-              Declare walkover
-            </button>
-          </div>
         </div>
       </template>
     </div>
