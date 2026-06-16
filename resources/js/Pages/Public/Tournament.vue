@@ -680,9 +680,12 @@ onUnmounted(() => {
                 </td>
                 <td class="py-2.5 text-[var(--color-bwf-text-2)]">{{ typeFor(cat) }}</td>
                 <td class="py-2.5 pr-4 text-right">
-                  <button type="button" class="bwf-btn" @click="viewBracket(cat.id)">
+                  <Link
+                    :href="route('public.tournament.bracket', { tournament: tournament.id, category: cat.id })"
+                    class="bwf-btn"
+                  >
                     View Bracket
-                  </button>
+                  </Link>
                 </td>
               </tr>
             </tbody>

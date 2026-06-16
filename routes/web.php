@@ -33,6 +33,8 @@ Route::get('/tournament/{tournament}', [PublicTournamentController::class, 'show
     ->name('public.tournament.show');
 Route::get('/tournament/{tournament}/live', [LiveController::class, 'index'])
     ->name('public.tournament.live');
+Route::get('/tournament/{tournament}/draw/{category}', [PublicTournamentController::class, 'bracket'])
+    ->name('public.tournament.bracket');
 
 /*
 |--------------------------------------------------------------------------

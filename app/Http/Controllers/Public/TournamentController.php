@@ -108,6 +108,51 @@ class TournamentController extends Controller
     }
 
     /**
+     * GET /tournament/{tournament}/draw/{category}
+     *
+     * Dedicated full-page bracket for one category: its group standings plus
+     * the knockout tree. Reuses the same serializers as the detail page.
+     */
+    public function bracket(Tournament $tournament, Category $category): Response
+    {
+        abort_unless($this->isPublic($tournament), 404);
+        abort_unless($category->tournament_id === $tournament->getKey(), 404);
+
+        $knockout = MatchModel::query()
+            ->where('category_id', $category->getKey())
+            ->whereIn('stage', [
+                MatchStage::SEMIFINAL->value,
+                MatchStage::FINAL->value,
+                MatchStage::THIRD_PLACE->value,
+            ])
+            ->with($this->matchEagerLoads())
+            ->orderByRaw('bracket_slot IS NULL, bracket_slot ASC')
+            ->get()
+            ->map(fn (MatchModel $m): array => $this->serializeMatch($m))
+            ->values()
+            ->all();
+
+        $standings = array_values(array_filter(
+            $this->buildStandings($tournament),
+            fn (array $g): bool => ($g['categoryId'] ?? null) === $category->getKey(),
+        ));
+
+        return Inertia::render('Public/Bracket', [
+            'tournament' => [
+                'id' => $tournament->getKey(),
+                'name' => $tournament->name,
+            ],
+            'category' => [
+                'id' => $category->getKey(),
+                'name' => $category->name,
+                'code' => $this->shortCategoryCode($category->type),
+            ],
+            'bracket' => $knockout,
+            'standings' => $standings,
+        ]);
+    }
+
+    /**
      * Build the flat per-category roster used by the public Players tab.
      * Categories (and their teams + players) are already eager loaded in
      * show() to avoid N+1.
