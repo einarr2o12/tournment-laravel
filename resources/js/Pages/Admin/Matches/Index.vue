@@ -251,7 +251,9 @@ const livePreview = computed(() => {
 
 function saveResult(m: Match) {
   resultForm
-    .transform(() => ({ sets: filledSets() }))
+    .transform(() => ({
+      sets: filledSets().map((s) => ({ teamAScore: s.a, teamBScore: s.b })),
+    }))
     .put(route('admin.matches.result', { match: m.id }), {
       preserveScroll: true,
       onSuccess: () => closeEditor(),
