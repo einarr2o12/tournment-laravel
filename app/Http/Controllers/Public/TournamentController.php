@@ -214,6 +214,7 @@ class TournamentController extends Controller
             $stats[$team->getKey()] = [
                 'teamId' => $team->getKey(),
                 'teamName' => $team->display_name ?? '',
+                'seed' => (int) ($team->seed ?? PHP_INT_MAX),
                 'played' => 0,
                 'won' => 0,
                 'lost' => 0,
@@ -263,19 +264,24 @@ class TournamentController extends Controller
         }
 
         $rows = array_values($stats);
+        // Ranking: (a) wins desc (1 win = 1 point, loss = 0)
+        //          (b) point difference desc (for - against)
+        //          (c) total points scored desc
+        //          (d) seed asc (final deterministic tiebreak)
         usort($rows, function (array $x, array $y): int {
             if ($y['won'] !== $x['won']) {
                 return $y['won'] <=> $x['won'];
             }
-            $xSetDiff = $x['setsFor'] - $x['setsAgainst'];
-            $ySetDiff = $y['setsFor'] - $y['setsAgainst'];
-            if ($ySetDiff !== $xSetDiff) {
-                return $ySetDiff <=> $xSetDiff;
-            }
             $xPointDiff = $x['pointsFor'] - $x['pointsAgainst'];
             $yPointDiff = $y['pointsFor'] - $y['pointsAgainst'];
+            if ($yPointDiff !== $xPointDiff) {
+                return $yPointDiff <=> $xPointDiff;
+            }
+            if ($y['pointsFor'] !== $x['pointsFor']) {
+                return $y['pointsFor'] <=> $x['pointsFor'];
+            }
 
-            return $yPointDiff <=> $xPointDiff;
+            return ($x['seed'] ?? PHP_INT_MAX) <=> ($y['seed'] ?? PHP_INT_MAX);
         });
 
         return $rows;

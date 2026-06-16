@@ -16,11 +16,10 @@ use App\Models\Team;
  * TournamentController / StandingsController, but exposes it as a reusable,
  * framework-light helper so the knockout seeder can derive 1st..Nth finishers.
  *
- * Ordering rule (per the confirmed spec, 1 win = 1 point):
- *   (a) match wins desc
- *   (b) set difference desc   (a "set" is one game; with 1-game-to-21 group
- *       matches the single game IS the set, so setsFor/Against still works)
- *   (c) point difference desc
+ * Ordering rule (per the confirmed spec, 1 win = 1 point, loss = 0):
+ *   (a) match wins desc       (1 point per win)
+ *   (b) point difference desc (pointsFor - pointsAgainst)
+ *   (c) total points scored desc
  *   (d) seed asc              (final deterministic tiebreak — lower seed wins)
  */
 final class GroupStandings
@@ -115,17 +114,15 @@ final class GroupStandings
         $rows = array_values($stats);
         usort($rows, static function (array $x, array $y): int {
             if ($y['won'] !== $x['won']) {
-                return $y['won'] <=> $x['won'];               // (a) wins desc
-            }
-            $xSetDiff = $x['setsFor'] - $x['setsAgainst'];
-            $ySetDiff = $y['setsFor'] - $y['setsAgainst'];
-            if ($ySetDiff !== $xSetDiff) {
-                return $ySetDiff <=> $xSetDiff;                // (b) set diff desc
+                return $y['won'] <=> $x['won'];               // (a) wins desc (1 win = 1 point)
             }
             $xPointDiff = $x['pointsFor'] - $x['pointsAgainst'];
             $yPointDiff = $y['pointsFor'] - $y['pointsAgainst'];
             if ($yPointDiff !== $xPointDiff) {
-                return $yPointDiff <=> $xPointDiff;            // (c) point diff desc
+                return $yPointDiff <=> $xPointDiff;            // (b) point difference desc
+            }
+            if ($y['pointsFor'] !== $x['pointsFor']) {
+                return $y['pointsFor'] <=> $x['pointsFor'];    // (c) total points scored desc
             }
 
             return $x['seed'] <=> $y['seed'];                 // (d) seed asc (final)
