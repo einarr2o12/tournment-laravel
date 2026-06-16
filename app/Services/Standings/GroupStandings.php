@@ -17,10 +17,10 @@ use App\Models\Team;
  * framework-light helper so the knockout seeder can derive 1st..Nth finishers.
  *
  * Ordering rule (per the confirmed spec, 1 win = 1 point, loss = 0):
- *   (a) match wins desc       (1 point per win)
- *   (b) point difference desc (pointsFor - pointsAgainst)
- *   (c) total points scored desc
- *   (d) seed asc              (final deterministic tiebreak — lower seed wins)
+ *   (a) match wins desc          (1 point per win)
+ *   (b) total points scored desc (pointsFor — head-to-head: more points ranks higher)
+ *   (c) point difference desc    (pointsFor - pointsAgainst)
+ *   (d) seed asc                 (final deterministic tiebreak — lower seed wins)
  */
 final class GroupStandings
 {
@@ -116,13 +116,13 @@ final class GroupStandings
             if ($y['won'] !== $x['won']) {
                 return $y['won'] <=> $x['won'];               // (a) wins desc (1 win = 1 point)
             }
+            if ($y['pointsFor'] !== $x['pointsFor']) {
+                return $y['pointsFor'] <=> $x['pointsFor'];    // (b) total points scored desc
+            }
             $xPointDiff = $x['pointsFor'] - $x['pointsAgainst'];
             $yPointDiff = $y['pointsFor'] - $y['pointsAgainst'];
             if ($yPointDiff !== $xPointDiff) {
-                return $yPointDiff <=> $xPointDiff;            // (b) point difference desc
-            }
-            if ($y['pointsFor'] !== $x['pointsFor']) {
-                return $y['pointsFor'] <=> $x['pointsFor'];    // (c) total points scored desc
+                return $yPointDiff <=> $xPointDiff;            // (c) point difference desc
             }
 
             return $x['seed'] <=> $y['seed'];                 // (d) seed asc (final)

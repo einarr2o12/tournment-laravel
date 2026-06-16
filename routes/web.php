@@ -42,8 +42,8 @@ Route::get('/tournament/{tournament}/draw/{category}', [PublicTournamentControll
 |--------------------------------------------------------------------------
 */
 
-Route::get('/login', [LoginController::class, 'create'])->name('login');
-Route::post('/login', [LoginController::class, 'store'])->name('login.store');
+Route::get('/admin/login', [LoginController::class, 'create'])->name('login');
+Route::post('/admin/login', [LoginController::class, 'store'])->name('login.store');
 Route::post('/logout', LogoutController::class)->name('logout');
 
 /*

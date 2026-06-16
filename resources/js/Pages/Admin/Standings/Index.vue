@@ -128,6 +128,7 @@ function diff(r: StandingRow): number {
                   <th class="text-right py-2 px-3">W</th>
                   <th class="text-right py-2 px-3">L</th>
                   <th class="text-right py-2 px-3">Sets</th>
+                  <th class="text-right py-2 px-3">Pts</th>
                   <th class="text-right py-2 px-4">Diff</th>
                 </tr>
               </thead>
@@ -149,6 +150,9 @@ function diff(r: StandingRow): number {
                   <td class="py-2 px-3 text-right text-slate-600">{{ r.lost }}</td>
                   <td class="py-2 px-3 text-right text-slate-600">
                     {{ r.setsFor }}-{{ r.setsAgainst }}
+                  </td>
+                  <td class="py-2 px-3 text-right font-mono font-semibold text-slate-800">
+                    {{ r.pointsFor }}
                   </td>
                   <td
                     class="py-2 px-4 text-right font-mono"

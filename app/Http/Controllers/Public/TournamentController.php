@@ -348,20 +348,20 @@ class TournamentController extends Controller
 
         $rows = array_values($stats);
         // Ranking: (a) wins desc (1 win = 1 point, loss = 0)
-        //          (b) point difference desc (for - against)
-        //          (c) total points scored desc
+        //          (b) total points scored desc (head-to-head: more points ranks higher)
+        //          (c) point difference desc (for - against)
         //          (d) seed asc (final deterministic tiebreak)
         usort($rows, function (array $x, array $y): int {
             if ($y['won'] !== $x['won']) {
                 return $y['won'] <=> $x['won'];
             }
+            if ($y['pointsFor'] !== $x['pointsFor']) {
+                return $y['pointsFor'] <=> $x['pointsFor'];
+            }
             $xPointDiff = $x['pointsFor'] - $x['pointsAgainst'];
             $yPointDiff = $y['pointsFor'] - $y['pointsAgainst'];
             if ($yPointDiff !== $xPointDiff) {
                 return $yPointDiff <=> $xPointDiff;
-            }
-            if ($y['pointsFor'] !== $x['pointsFor']) {
-                return $y['pointsFor'] <=> $x['pointsFor'];
             }
 
             return ($x['seed'] ?? PHP_INT_MAX) <=> ($y['seed'] ?? PHP_INT_MAX);

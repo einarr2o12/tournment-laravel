@@ -62,27 +62,6 @@ const hasTabs = computed(() => props.tabs.length > 0);
         >
           🏸 {{ t('common.appName') }}
         </Link>
-        <nav class="flex items-center gap-2">
-          <template v-if="isAuthenticated">
-            <Link
-              v-if="isAdmin"
-              :href="route('admin.dashboard')"
-              class="bwf-btn"
-            >
-              {{ t('common.adminConsole') }}
-            </Link>
-            <Link
-              v-else-if="isReferee"
-              :href="route('referee.dashboard')"
-              class="bwf-btn"
-            >
-              {{ t('common.refereeDashboard') }}
-            </Link>
-          </template>
-          <Link v-else :href="route('login')" class="bwf-btn">
-            {{ t('common.signIn') }}
-          </Link>
-        </nav>
       </div>
 
       <!-- page-specific hero content (title / meta / back link) -->

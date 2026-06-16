@@ -4,8 +4,9 @@ import { computed } from 'vue';
 /**
  * BWF dark standings table for ONE group (reference image 1 aesthetic).
  *
- * Ranking is wins -> point differential (the backend already returns rows in
- * rank order; this component does not re-sort, it only displays).
+ * Ranking is wins -> total points scored -> point differential (the backend
+ * already returns rows in rank order; this component does not re-sort, it only
+ * displays).
  */
 export interface StandingRow {
   teamId: string;
@@ -59,6 +60,7 @@ const hasRows = computed(() => props.rows.length > 0);
           <th class="w-10 py-2 text-center font-semibold">W</th>
           <th class="w-10 py-2 text-center font-semibold">L</th>
           <th v-if="showSets" class="w-14 py-2 text-center font-semibold">Sets</th>
+          <th class="w-12 py-2 text-center font-semibold">Pts</th>
           <th class="w-14 py-2 pr-4 text-right font-semibold">Diff</th>
         </tr>
       </thead>
@@ -85,6 +87,9 @@ const hasRows = computed(() => props.rows.length > 0);
           <td class="py-2.5 text-center font-mono text-[var(--color-bwf-text-2)]">{{ r.lost }}</td>
           <td v-if="showSets" class="py-2.5 text-center font-mono text-[var(--color-bwf-text-2)]">
             {{ (r.setsFor ?? 0) }}-{{ (r.setsAgainst ?? 0) }}
+          </td>
+          <td class="py-2.5 text-center font-mono font-semibold text-[var(--color-bwf-text)]">
+            {{ r.pointsFor ?? 0 }}
           </td>
           <td class="py-2.5 pr-4 text-right">
             <span
